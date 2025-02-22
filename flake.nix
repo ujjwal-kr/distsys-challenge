@@ -18,6 +18,11 @@
             go
             gotools
             golangci-lint
+
+            jdk
+            maelstrom-clj
+            graphviz
+            gnuplot
           ];
         };
       }
