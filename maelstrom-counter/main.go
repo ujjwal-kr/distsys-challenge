@@ -16,6 +16,11 @@ func main() {
 
 	var count int64 = 0
 
+	n.Handle("init", func(msg maelstrom.Message) error {
+		kv.Write(ctx, "0", 0.0)
+		return nil
+	})
+
 	n.Handle("read", func(msg maelstrom.Message) error {
 		var body map[string]any
 		if err := json.Unmarshal(msg.Body, &body); err != nil {
@@ -25,8 +30,19 @@ func main() {
 		if err != nil {
 			return err
 		}
+
+		var floatValue float64
+		switch v := value.(type) {
+		case int:
+			floatValue = float64(v)
+		case float64:
+			floatValue = v
+		default:
+			return fmt.Errorf("unexpected type for value: %T", value)
+		}
+
 		body["type"] = "read_ok"
-		body["value"] = value.(float64)
+		body["value"] = floatValue
 		return n.Reply(msg, body)
 	})
 
@@ -35,13 +51,29 @@ func main() {
 		if err := json.Unmarshal(msg.Body, &body); err != nil {
 			return err
 		}
-		var value float64 = body["delta"].(float64)
+
+		delta, ok := body["delta"].(float64)
+		if !ok {
+			return fmt.Errorf("invalid delta type: %T", body["delta"])
+		}
+
 		latest, err := kv.Read(ctx, fmt.Sprint(count))
 		if err != nil {
 			return err
 		}
-		if value != latest {
-			kv.Write(ctx, fmt.Sprint(count), value)
+
+		var latestFloat float64
+		switch v := latest.(type) {
+		case int:
+			latestFloat = float64(v)
+		case float64:
+			latestFloat = v
+		default:
+			return fmt.Errorf("unexpected type for latest value: %T", latest)
+		}
+
+		if delta != latestFloat {
+			kv.Write(ctx, fmt.Sprint(count), delta)
 			count++
 			for _, node := range n.NodeIDs() {
 				if node != n.ID() {
@@ -49,6 +81,7 @@ func main() {
 				}
 			}
 		}
+
 		delete(body, "delta")
 		body["type"] = "add_ok"
 		return n.Reply(msg, body)
