@@ -1,4 +1,4 @@
-module broadcast
+module maelstrom-broadcast
 
 go 1.23.5
 
