@@ -10,7 +10,7 @@ import (
 func main() {
 	n := maelstrom.NewNode()
 	var values []float64 = make([]float64, 0)
-
+	var leftover []map[string]any
 	n.Handle("broadcast", func(msg maelstrom.Message) error {
 		var body map[string]any
 		err := json.Unmarshal(msg.Body, &body)
@@ -29,8 +29,22 @@ func main() {
 			values = append(values, val)
 			nodes := n.NodeIDs()
 			for _, neighbour := range nodes {
-				n.Send(neighbour, body)
+				n.RPC(neighbour, body, func(msg maelstrom.Message) error {
+					var response map[string]any
+					err := json.Unmarshal(msg.Body, &response)
+					if response["type"] == "error" {
+						leftover = append(leftover, body)
+					}
+					return err
+				})
 			}
+			go func() {
+				for _, msg := range leftover {
+					for _, neighbour := range nodes {
+						n.Send(neighbour, msg)
+					}
+				}
+			}()
 		}
 		body["type"] = "broadcast_ok"
 		delete(body, "message")
