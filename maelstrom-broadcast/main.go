@@ -3,6 +3,9 @@ package main
 import (
 	"encoding/json"
 	"log"
+	"sync"
+
+	"slices"
 
 	maelstrom "github.com/jepsen-io/maelstrom/demo/go"
 )
@@ -19,32 +22,40 @@ func main() {
 		}
 		var val float64 = body["message"].(float64)
 		var f uint8 = 0
-		for _, num := range values {
-			if num == val {
-				f = 1
-				break
-			}
+		if slices.Contains(values, val) {
+			f = 1
 		}
 		if f == 0 {
 			values = append(values, val)
 			nodes := n.NodeIDs()
+			var wg1 sync.WaitGroup
+			wg1.Add(len(nodes))
 			for _, neighbour := range nodes {
-				n.RPC(neighbour, body, func(msg maelstrom.Message) error {
-					var response map[string]any
-					err := json.Unmarshal(msg.Body, &response)
-					if response["type"] == "error" {
-						leftover = append(leftover, body)
-					}
-					return err
-				})
+				go func(neighbour string) {
+					n.RPC(neighbour, body, func(msg maelstrom.Message) error {
+						var response map[string]any
+						err := json.Unmarshal(msg.Body, &response)
+						if response["type"] == "error" {
+							leftover = append(leftover, body)
+						}
+						wg1.Done()
+						return err
+					})
+				}(neighbour)
 			}
-			go func() {
-				for _, msg := range leftover {
+			var wg2 sync.WaitGroup
+			wg2.Add(len(leftover))
+
+			for _, msg := range leftover {
+				go func(msg map[string]any) {
 					for _, neighbour := range nodes {
 						n.Send(neighbour, msg)
 					}
-				}
-			}()
+					wg2.Done()
+				}(msg)
+			}
+			wg1.Wait()
+			wg2.Wait()
 		}
 		body["type"] = "broadcast_ok"
 		delete(body, "message")
