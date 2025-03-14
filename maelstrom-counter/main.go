@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"sync"
 
 	maelstrom "github.com/jepsen-io/maelstrom/demo/go"
 )
@@ -75,10 +76,16 @@ func main() {
 		if delta != latestFloat {
 			kv.Write(ctx, fmt.Sprint(count), delta)
 			count++
+			var wg sync.WaitGroup
+			defer wg.Wait()
+			wg.Add(len(n.NodeIDs()))
 			for _, node := range n.NodeIDs() {
-				if node != n.ID() {
-					n.Send(node, body)
-				}
+				go func(n *maelstrom.Node, body map[string]any) {
+					defer wg.Done()
+					if node != n.ID() && body["src"] != body["dest"] {
+						n.Send(node, body)
+					}
+				}(n, body)
 			}
 		}
 
