@@ -82,18 +82,13 @@ func main() {
 		if !ok {
 			return nil
 		}
-
-		mu.Lock()
 		for k, v := range commitOffsetsAny {
 			if num, ok := v.(float64); ok {
 				offsets[k] = int(num)
 			} else {
-				mu.Unlock()
 				return fmt.Errorf("unexpected type for offset: %T", v)
 			}
 		}
-		mu.Unlock()
-
 		body["type"] = "commit_offsets_ok"
 		delete(body, "offsets")
 		return n.Reply(msg, body)
@@ -105,15 +100,12 @@ func main() {
 			return err
 		}
 		listOffsets := CommittedOffsets{}
-		mu.Lock()
 		for _, key := range body["keys"].([]any) {
 			v, exists := offsets[key.(string)]
 			if exists {
 				listOffsets[key.(string)] = v
 			}
 		}
-		mu.Unlock()
-
 		body["offsets"] = listOffsets
 		body["type"] = "list_committed_offsets_ok"
 		delete(body, "keys")
