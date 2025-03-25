@@ -79,14 +79,6 @@ func main() {
 			var wg sync.WaitGroup
 			defer wg.Wait()
 			wg.Add(len(n.NodeIDs()))
-			for _, node := range n.NodeIDs() {
-				go func(n *maelstrom.Node, body map[string]any) {
-					defer wg.Done()
-					if node != n.ID() && body["src"] != body["dest"] {
-						n.Send(node, body)
-					}
-				}(n, body)
-			}
 		}
 
 		delete(body, "delta")
